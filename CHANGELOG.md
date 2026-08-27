@@ -5,7 +5,7 @@ All notable changes to this project are recorded here. The format is based on
 [Semantic Versioning 2.0.0](https://semver.org/). See
 [docs/versioning.md](docs/versioning.md) for the project's version policy.
 
-## [0.3.0] - Unreleased
+## [0.3.0] - 2026-08-26
 
 First public release.
 
