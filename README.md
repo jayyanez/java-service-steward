@@ -188,6 +188,11 @@ cargo build --release                 # target\release\wrapper.exe
 ./scripts/build-release.ps1           # fmt, clippy, tests, both artifacts, version checks
 ```
 
+The crate is also on [crates.io](https://crates.io/crates/java-service-steward):
+`cargo install java-service-steward` builds `wrapper.exe` from the released
+sources. It does not build `wrapper.jar`; take it from the release zip or run
+`scripts/build-java-bridge.ps1` from the crate sources with a JDK on `PATH`.
+
 The integration tests compile small synthetic Java applications and run real
 JVMs, so they need a JDK on `PATH` (`javac`, `jar`, `jcmd`, and `jlink` are
 looked up there). Without a JDK those tests skip; set

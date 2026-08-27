@@ -90,6 +90,24 @@ step-by-step procedure that turns a commit into a published release.
     keep the generated list of pull requests if it is useful, and add a link
     to the `CHANGELOG.md` section for the version.
 
+11. **Publish the crate.** The same commit is published to crates.io so that
+    `cargo install java-service-steward` builds the released `wrapper.exe`
+    (the crate contains the bridge sources and `scripts/build-java-bridge.ps1`,
+    but `cargo install` does not produce `wrapper.jar`; users take it from the
+    GitHub release). Requires a crates.io token saved with `cargo login`:
+
+    ```powershell
+    git checkout vX.Y.Z
+    cargo publish --dry-run --locked
+    cargo publish --locked
+    ```
+
+    A published version cannot be deleted, only yanked
+    (`cargo yank --version X.Y.Z`), so run the dry run first and check the
+    file list with `cargo package --list --locked`. docs.rs builds the
+    documentation against `x86_64-pc-windows-msvc`
+    (`[package.metadata.docs.rs]` in `Cargo.toml`).
+
 ## Rules
 
 - **Never reuse a version number.** If anything in the artifacts must change
