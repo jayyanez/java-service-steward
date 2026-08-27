@@ -202,4 +202,4 @@ See [diagnostics.md](diagnostics.md) for the details.
 
 Java Service Steward is an independent project; product names are used only
 to describe compatibility. See the "Trademarks and affiliation" section of the
-[README](../README.md#trademarks-and-affiliation).
+[README](https://github.com/jayyanez/java-service-steward#trademarks-and-affiliation).

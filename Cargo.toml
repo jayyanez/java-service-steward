@@ -10,7 +10,20 @@ homepage = "https://github.com/jayyanez/java-service-steward"
 readme = "README.md"
 keywords = ["windows-service", "java", "service-wrapper", "supervisor"]
 categories = ["command-line-utilities"]
-publish = false
+include = [
+    "src/**",
+    "build.rs",
+    "java/**",
+    "scripts/**",
+    "examples/**",
+    "Cargo.toml",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+    "NOTICE",
+    "THIRD_PARTY_NOTICES.md",
+]
 
 [[bin]]
 name = "wrapper"

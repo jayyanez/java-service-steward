@@ -1,0 +1,9 @@
+title: Java Service Steward
+description: Runs, controls, and monitors Java applications as Windows services. Reads wrapper.conf-style configuration files.
+theme: jekyll-theme-cayman
+show_downloads: false
+relative_links:
+  enabled: true
+  collections: true
+exclude:
+  - plans
