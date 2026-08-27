@@ -665,16 +665,7 @@ mod tests {
     use std::fs;
 
     fn unique_directory() -> std::path::PathBuf {
-        let path = std::env::temp_dir().join(format!(
-            "jss-config-test-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("time after epoch")
-                .as_nanos()
-        ));
-        fs::create_dir_all(&path).expect("create test directory");
-        path
+        crate::test_support::unique_directory("config")
     }
 
     #[test]

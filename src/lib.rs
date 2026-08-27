@@ -71,3 +71,28 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+pub(crate) mod test_support {
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    /// Creates a fresh directory under the system temp dir. The name combines
+    /// the process id, a timestamp and a process-wide counter, so two tests
+    /// that start in the same clock tick never share a directory.
+    pub(crate) fn unique_directory(label: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "jss-{label}-test-{}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time after epoch")
+                .as_nanos(),
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&path).expect("create test directory");
+        path
+    }
+}

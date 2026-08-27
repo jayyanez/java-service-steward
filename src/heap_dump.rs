@@ -262,15 +262,7 @@ mod tests {
 
     #[test]
     fn heap_dump_names_never_overwrite_an_existing_file() {
-        let directory = std::env::temp_dir().join(format!(
-            "jss-heap-name-test-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
-        ));
-        fs::create_dir_all(&directory).expect("create test directory");
+        let directory = crate::test_support::unique_directory("heap-name");
         let first = unique_path(&directory, 123, 4).expect("allocate first path");
         fs::write(&first, b"existing").expect("reserve first path");
         let second = unique_path(&directory, 123, 4).expect("allocate second path");

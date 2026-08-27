@@ -82,14 +82,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn test_directory(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "jss-diagnostics-{name}-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos()
-        ))
+        crate::test_support::unique_directory(&format!("diagnostics-{name}"))
     }
 
     #[test]

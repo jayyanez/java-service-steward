@@ -1003,15 +1003,6 @@ mod tests {
     }
 
     fn test_directory(label: &str) -> std::path::PathBuf {
-        let path = std::env::temp_dir().join(format!(
-            "jss-{label}-test-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
-        ));
-        fs::create_dir_all(&path).expect("create test directory");
-        path
+        crate::test_support::unique_directory(label)
     }
 }

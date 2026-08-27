@@ -161,9 +161,7 @@ mod tests {
 
     #[test]
     fn auto_uses_jcmd_only_when_reduced_signal_usage_is_enabled() {
-        let directory =
-            std::env::temp_dir().join(format!("jss-thread-method-test-{}", std::process::id()));
-        fs::create_dir_all(&directory).expect("create test directory");
+        let directory = crate::test_support::unique_directory("thread-method");
         let path = directory.join("wrapper.conf");
         fs::write(&path, "wrapper.java.command=java\n").expect("write config");
         let config = Config::load(&path, &directory, &[]).expect("load config");
@@ -180,11 +178,7 @@ mod tests {
 
     #[test]
     fn configured_method_can_force_either_backend() {
-        let directory = std::env::temp_dir().join(format!(
-            "jss-thread-method-override-test-{}",
-            std::process::id()
-        ));
-        fs::create_dir_all(&directory).expect("create test directory");
+        let directory = crate::test_support::unique_directory("thread-method-override");
         let path = directory.join("wrapper.conf");
         fs::write(
             &path,
@@ -198,9 +192,7 @@ mod tests {
 
     #[test]
     fn forced_break_rejects_xrs_with_an_actionable_capability_error() {
-        let directory =
-            std::env::temp_dir().join(format!("jss-thread-break-xrs-test-{}", std::process::id()));
-        fs::create_dir_all(&directory).expect("create test directory");
+        let directory = crate::test_support::unique_directory("thread-break-xrs");
         let path = directory.join("wrapper.conf");
         fs::write(
             &path,

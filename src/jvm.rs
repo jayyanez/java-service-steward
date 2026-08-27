@@ -667,16 +667,7 @@ mod tests {
     }
 
     fn unique_directory() -> std::path::PathBuf {
-        let directory = std::env::temp_dir().join(format!(
-            "jss-jvm-test-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
-        ));
-        fs::create_dir_all(&directory).expect("create test directory");
-        directory
+        crate::test_support::unique_directory("jvm")
     }
 
     fn load_launcher_config(directory: &std::path::Path) -> Config {
