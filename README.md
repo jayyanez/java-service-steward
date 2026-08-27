@@ -238,6 +238,20 @@ submitted for inclusion in this project by you, as defined in the Apache-2.0
 license, shall be dual licensed as above, without any additional terms or
 conditions.
 
+## Code signing
+
+`wrapper.exe` is not yet Authenticode-signed; Windows SmartScreen may warn on
+first launch of a downloaded copy. The project has applied for free code
+signing for open-source projects through [SignPath Foundation](https://signpath.org/);
+once approved, release executables will be signed with a certificate issued in
+SignPath Foundation's name, and this section will name the team roles and the
+signing policy. Until then, every release carries a Sigstore build-provenance
+attestation (see [docs/release.md](docs/release.md#supply-chain-artifacts)).
+
+Privacy: this program will not transfer any information to other networked
+systems unless specifically requested by the user or the person installing or
+operating it.
+
 ## Trademarks and affiliation
 
 Java Service Steward is an independent project. It is not affiliated with,
