@@ -90,11 +90,19 @@ step-by-step procedure that turns a commit into a published release.
     keep the generated list of pull requests if it is useful, and add a link
     to the `CHANGELOG.md` section for the version.
 
-11. **Publish the crate.** The same commit is published to crates.io so that
-    `cargo install java-service-steward` builds the released `wrapper.exe`
-    (the crate contains the bridge sources and `scripts/build-java-bridge.ps1`,
-    but `cargo install` does not produce `wrapper.jar`; users take it from the
-    GitHub release). Requires a crates.io token saved with `cargo login`:
+11. **Check the crates.io publication.** After the GitHub Release is created,
+    the same workflow runs `cargo publish --locked` when the repository
+    defines the `CARGO_REGISTRY_TOKEN` secret (a crates.io API token with the
+    `publish-update` scope for `java-service-steward`; forks without the
+    secret skip the step). Confirm that
+    https://crates.io/crates/java-service-steward lists the new version.
+    `cargo install java-service-steward` then builds the released
+    `wrapper.exe`; the crate contains the bridge sources and
+    `scripts/build-java-bridge.ps1`, but `cargo install` does not produce
+    `wrapper.jar`, so users take it from the GitHub release.
+
+    If the step failed or the secret is missing, publish by hand with a
+    token saved through `cargo login`:
 
     ```powershell
     git checkout vX.Y.Z
@@ -103,10 +111,8 @@ step-by-step procedure that turns a commit into a published release.
     ```
 
     A published version cannot be deleted, only yanked
-    (`cargo yank --version X.Y.Z`), so run the dry run first and check the
-    file list with `cargo package --list --locked`. docs.rs builds the
-    documentation against `x86_64-pc-windows-msvc`
-    (`[package.metadata.docs.rs]` in `Cargo.toml`).
+    (`cargo yank --version X.Y.Z`). docs.rs builds the documentation against
+    `x86_64-pc-windows-msvc` (`[package.metadata.docs.rs]` in `Cargo.toml`).
 
 ## Rules
 
