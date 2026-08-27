@@ -63,6 +63,9 @@ final class BackendClient {
     private final int port;
     private final AtomicBoolean wrapperRequestedStop = new AtomicBoolean(false);
     private final AtomicBoolean abnormalExit = new AtomicBoolean(false);
+    // Set by the shutdown hook: read failures after this point are the
+    // hook closing the socket, not a lost channel.
+    private final AtomicBoolean jvmShuttingDown = new AtomicBoolean(false);
     private final AtomicBoolean stoppedSent = new AtomicBoolean(false);
     private final Properties properties = new Properties();
 
@@ -129,7 +132,7 @@ final class BackendClient {
                 try {
                     controlLoop(handler);
                 } catch (IOException error) {
-                    if (wrapperRequestedStop.get()) {
+                    if (wrapperRequestedStop.get() || jvmShuttingDown.get()) {
                         return;
                     }
                     abnormalExit.set(true);
@@ -137,6 +140,9 @@ final class BackendClient {
                             + error.getMessage());
                     System.exit(1);
                 } catch (RuntimeException error) {
+                    if (jvmShuttingDown.get()) {
+                        return;
+                    }
                     abnormalExit.set(true);
                     error.printStackTrace(System.err);
                     System.exit(1);
@@ -153,7 +159,7 @@ final class BackendClient {
             try {
                 packet = readPacket();
             } catch (SocketTimeoutException error) {
-                if (wrapperRequestedStop.get()) {
+                if (wrapperRequestedStop.get() || jvmShuttingDown.get()) {
                     return;
                 }
                 if (pingTimedOut()) {
@@ -271,6 +277,7 @@ final class BackendClient {
      * {@link Steward#stop(int)} instead.
      */
     void onJvmShutdown() {
+        jvmShuttingDown.set(true);
         if (!wrapperRequestedStop.get() && !abnormalExit.get()) {
             sendQuietly(STOP, "0");
         }

@@ -5,6 +5,16 @@ All notable changes to this project are recorded here. The format is based on
 [Semantic Versioning 2.0.0](https://semver.org/). See
 [docs/versioning.md](docs/versioning.md) for the project's version policy.
 
+## [0.3.1] - 2026-08-26
+
+### Fixed
+
+- On Java 8 the bridge could turn a normal application exit (the application
+  `main` returned) into JVM exit code 1: the control thread treated the socket
+  closed by its own shutdown hook as a lost channel and called `System.exit(1)`
+  while the JVM was already shutting down. The control thread now stops
+  silently once shutdown has begun.
+
 ## [0.3.0] - 2026-08-26
 
 First public release.

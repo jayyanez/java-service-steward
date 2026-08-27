@@ -1,6 +1,6 @@
 [package]
 name = "java-service-steward"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 rust-version = "1.88"
 description = "Runs, controls, and monitors Java applications as Windows services; reads wrapper.conf-style configuration files"
