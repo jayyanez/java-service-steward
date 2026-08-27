@@ -77,6 +77,12 @@ The complete property-by-property table is in
 `wrapper.exe --help` prints the complete command and property reference; no
 configuration file is read for that command.
 
+Every release also ships a CycloneDX SBOM and a Sigstore build-provenance
+attestation; `gh attestation verify <zip> --owner jayyanez` proves that a
+download was built by this repository's release workflow. See
+[docs/release.md](docs/release.md#supply-chain-artifacts). `wrapper.exe` is not
+yet Authenticode-signed, so SmartScreen may warn on first launch.
+
 ## Configuration
 
 A minimal `wrapper.conf`:

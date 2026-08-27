@@ -5,6 +5,16 @@ All notable changes to this project are recorded here. The format is based on
 [Semantic Versioning 2.0.0](https://semver.org/). See
 [docs/versioning.md](docs/versioning.md) for the project's version policy.
 
+## [Unreleased]
+
+### Added
+
+- Every release publishes a CycloneDX SBOM of the Rust dependencies, a
+  Sigstore build-provenance attestation and an SBOM attestation
+  (`gh attestation verify`); `SHA256SUMS` also covers the SBOM.
+- `wrapper.exe` carries a Windows version resource (product name,
+  description, file and product version).
+
 ## [0.3.1] - 2026-08-26
 
 ### Fixed

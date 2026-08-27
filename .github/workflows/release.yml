@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -54,6 +56,16 @@ jobs:
       - name: Verify version consistency and artifacts
         run: pwsh ./scripts/verify-version.ps1 -RequireArtifacts
 
+      - name: Generate the CycloneDX SBOM
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo install cargo-cyclonedx --locked
+          $name = "java-service-steward-${{ steps.version.outputs.version }}-windows-x64.cdx"
+          cargo cyclonedx --format json --spec-version 1.5 --target x86_64-pc-windows-msvc --override-filename $name
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          Move-Item -LiteralPath "$name.json" -Destination (Join-Path 'dist' "$name.json")
+
       - name: Stage, zip, and hash the release
         shell: pwsh
         run: |
@@ -84,14 +96,31 @@ jobs:
           $zip = Join-Path $dist "$name.zip"
           Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal
 
-          $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
           $sums = Join-Path $dist 'SHA256SUMS'
-          [System.IO.File]::WriteAllText($sums, "$hash  $name.zip`n", [System.Text.UTF8Encoding]::new($false))
+          $lines = foreach ($artifact in @("$name.zip", "$name.cdx.json")) {
+            $hash = (Get-FileHash -LiteralPath (Join-Path $dist $artifact) -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $artifact"
+          }
+          [System.IO.File]::WriteAllText($sums, (($lines -join "`n") + "`n"), [System.Text.UTF8Encoding]::new($false))
 
           Write-Host "Release contents:"
           Get-ChildItem -LiteralPath $stage -Recurse -File | ForEach-Object { Write-Host "  $($_.FullName.Substring($stage.Length + 1))" }
           Write-Host "SHA256SUMS:"
           Get-Content -LiteralPath $sums
+
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            dist/java-service-steward-${{ steps.version.outputs.version }}-windows-x64.zip
+            dist/java-service-steward-${{ steps.version.outputs.version }}-windows-x64.cdx.json
+            dist/SHA256SUMS
+
+      - name: Attest the SBOM of the release archive
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/java-service-steward-${{ steps.version.outputs.version }}-windows-x64.zip
+          sbom-path: dist/java-service-steward-${{ steps.version.outputs.version }}-windows-x64.cdx.json
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -99,6 +128,7 @@ jobs:
           name: Java Service Steward ${{ steps.version.outputs.version }}
           files: |
             dist/java-service-steward-${{ steps.version.outputs.version }}-windows-x64.zip
+            dist/java-service-steward-${{ steps.version.outputs.version }}-windows-x64.cdx.json
             dist/SHA256SUMS
           fail_on_unmatched_files: true
           generate_release_notes: true

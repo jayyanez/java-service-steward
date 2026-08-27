@@ -106,20 +106,46 @@ step-by-step procedure that turns a commit into a published release.
 - Pre-releases (`X.Y.Z-rc.1`) follow the same procedure. Mark the GitHub
   Release as a pre-release by hand after the workflow has created it.
 
-## Future improvements
+## Supply-chain artifacts
 
-- **Authenticode code signing.** `wrapper.exe` is currently unsigned, so
-  Windows SmartScreen may warn on first launch and some organizations cannot
-  deploy it. [SignPath Foundation](https://signpath.org/) provides free code
-  signing for open-source projects through a GitHub Actions integration; the
-  release workflow would upload the built executable, receive the signed
-  file, and package that instead. Signing `wrapper.jar` with `jarsigner`
-  could be added at the same time.
-- **Sigstore.** Keyless signing of the zip and `SHA256SUMS` with `cosign`
-  from the workflow's OIDC identity, so that users can run
-  `cosign verify-blob` against the published `.sig` and certificate without
-  any key management on the project side. GitHub's
-  `actions/attest-build-provenance` offers a similar, GitHub-hosted
-  provenance attestation.
-- **SBOM.** Attach a CycloneDX bill of materials generated with
-  `cargo cyclonedx` to each release.
+Every release also publishes:
+
+- `java-service-steward-<version>-windows-x64.cdx.json`: a CycloneDX 1.5
+  software bill of materials of the Rust dependencies compiled into
+  `wrapper.exe`, generated with `cargo cyclonedx` for the
+  `x86_64-pc-windows-msvc` target. `wrapper.jar` has no third-party
+  dependencies.
+- `SHA256SUMS`: hashes of the zip and of the SBOM.
+- A SLSA build-provenance attestation (Sigstore, recorded through
+  `actions/attest`) covering the zip, the SBOM and `SHA256SUMS`, plus an SBOM
+  attestation that links the SBOM to the zip. Attestations are stored by
+  GitHub, not as release assets.
+
+To verify a download:
+
+```powershell
+# Hashes
+Get-FileHash java-service-steward-<version>-windows-x64.zip -Algorithm SHA256
+Get-Content SHA256SUMS
+
+# Provenance: proves the file was built by this repository's release workflow
+gh attestation verify java-service-steward-<version>-windows-x64.zip --owner jayyanez
+
+# SBOM attestation
+gh attestation verify java-service-steward-<version>-windows-x64.zip --owner jayyanez --predicate-type https://cyclonedx.org/bom
+```
+
+`wrapper.exe` carries a Windows version resource (product name, file
+description, file and product version) so that Explorer, SmartScreen and
+code-signing services can identify it.
+
+## Code signing (pending)
+
+`wrapper.exe` is not yet Authenticode-signed, so Windows SmartScreen may warn
+on first launch and application-control policies may block it. The plan is
+free signing through [SignPath Foundation](https://signpath.org/) for
+open-source projects: the release workflow uploads the built executable to
+SignPath, receives the signed file and stages that instead of the unsigned
+one; every signing request is approved manually by the maintainer. Signing
+`wrapper.jar` with `jarsigner` can be added at the same time. Until then, the
+provenance attestation above is the way to confirm that a download is genuine.
