@@ -25,7 +25,8 @@ code.
 
 ## Status
 
-Pre-1.0. The current version is **0.3.0**, the first public release. The
+Pre-1.0. The first public release was 0.3.0; the current version is the
+latest section of [CHANGELOG.md](CHANGELOG.md). The
 configuration format, command line, log format, and supervision semantics are
 meant for production use; the Rust and Java APIs may still change between
 minor versions, and every incompatible change is recorded in
