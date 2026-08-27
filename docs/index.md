@@ -20,6 +20,10 @@ no native library, no JNI and no installer.
 - **Downloads:** <https://github.com/jayyanez/java-service-steward/releases>
   (zip with `wrapper.exe` and `wrapper.jar`, `SHA256SUMS`, CycloneDX SBOM and
   a Sigstore build-provenance attestation)
+- **Crate:** <https://crates.io/crates/java-service-steward>
+  (`cargo install java-service-steward` builds `wrapper.exe` from source)
+- **Introduction article:** [Java Service Steward, an open-source host for
+  Java Windows services that reads wrapper.conf](https://dev.to/jayyanez/java-service-steward-an-open-source-host-for-java-windows-services-that-reads-wrapperconf-aam)
 
 ## Documentation
 
