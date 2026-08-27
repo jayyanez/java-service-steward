@@ -1,0 +1,32 @@
+# cargo-about configuration. Generate the notices file with:
+#   cargo about generate about.hbs -o THIRD_PARTY_NOTICES.md
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "Unicode-3.0",
+    "Zlib",
+    "Apache-2.0 WITH LLVM-exception",
+]
+# Only the shipped target is inspected; crates that never build for it are left out.
+targets = ["x86_64-pc-windows-msvc"]
+# Build dependencies are compiled into the release toolchain run, so keep them.
+ignore-build-dependencies = false
+# Dev dependencies never ship in wrapper.exe.
+ignore-dev-dependencies = true
+
+# encoding_rs ships its license texts as LICENSE-MIT and LICENSE-WHATWG; without
+# this clarification cargo-about also harvests a source file that carries the
+# BSD header and prints it twice.
+[encoding_rs.clarify]
+license = "(Apache-2.0 OR MIT) AND BSD-3-Clause"
+
+[[encoding_rs.clarify.files]]
+path = "LICENSE-MIT"
+license = "MIT"
+checksum = "3fa4ca83dcc9237839b1bdeb2e6d16bdfb5ec0c5ce42b24694d8bbf0dcbef72c"
+
+[[encoding_rs.clarify.files]]
+path = "LICENSE-WHATWG"
+license = "BSD-3-Clause"
+checksum = "838118388fe5c2e7f1dbbaeed13e1c7f3ebf88be91319c7c1d77c18e987d1a50"

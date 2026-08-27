@@ -1,0 +1,104 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: windows-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Check that the tag matches the Cargo version
+        id: version
+        shell: pwsh
+        run: |
+          $cargoToml = Get-Content -LiteralPath Cargo.toml -Raw
+          $match = [regex]::Match($cargoToml, '(?ms)^\[package\].*?^version\s*=\s*"([^"]+)"')
+          if (-not $match.Success) {
+            throw 'Could not read the package version from Cargo.toml'
+          }
+          $version = $match.Groups[1].Value
+          $tag = $env:GITHUB_REF_NAME
+          if ($tag -cne "v$version") {
+            throw "Tag '$tag' does not match Cargo.toml version '$version'; expected tag 'v$version'"
+          }
+          Write-Host "Releasing version $version from tag $tag"
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Build Java bridge
+        run: pwsh ./scripts/build-java-bridge.ps1
+
+      - name: Verify version consistency and artifacts
+        run: pwsh ./scripts/verify-version.ps1 -RequireArtifacts
+
+      - name: Stage, zip, and hash the release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = '${{ steps.version.outputs.version }}'
+          $name = "java-service-steward-$version-windows-x64"
+          $dist = Join-Path (Get-Location) 'dist'
+          $stage = Join-Path $dist $name
+          New-Item -ItemType Directory -Path (Join-Path $stage 'examples') -Force | Out-Null
+
+          $rootFiles = @(
+            'target/release/wrapper.exe',
+            'target/release/wrapper.jar',
+            'LICENSE-APACHE',
+            'LICENSE-MIT',
+            'NOTICE',
+            'THIRD_PARTY_NOTICES.md',
+            'README.md'
+          )
+          foreach ($file in $rootFiles) {
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+              throw "Required release file is missing: $file"
+            }
+            Copy-Item -LiteralPath $file -Destination $stage
+          }
+          Copy-Item -LiteralPath 'examples/wrapper.conf.example' -Destination (Join-Path $stage 'examples')
+
+          $zip = Join-Path $dist "$name.zip"
+          Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal
+
+          $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $sums = Join-Path $dist 'SHA256SUMS'
+          [System.IO.File]::WriteAllText($sums, "$hash  $name.zip`n", [System.Text.UTF8Encoding]::new($false))
+
+          Write-Host "Release contents:"
+          Get-ChildItem -LiteralPath $stage -Recurse -File | ForEach-Object { Write-Host "  $($_.FullName.Substring($stage.Length + 1))" }
+          Write-Host "SHA256SUMS:"
+          Get-Content -LiteralPath $sums
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Java Service Steward ${{ steps.version.outputs.version }}
+          files: |
+            dist/java-service-steward-${{ steps.version.outputs.version }}-windows-x64.zip
+            dist/SHA256SUMS
+          fail_on_unmatched_files: true
+          generate_release_notes: true

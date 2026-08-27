@@ -1,0 +1,302 @@
+USAGE
+  Tip for a paged view: wrapper.exe --help | more
+
+  wrapper.exe <command> <configuration file> [name=value ...] [-- <application args>]
+  wrapper.exe <configuration file> [name=value ...] [-- <application args>]
+  wrapper.exe <command>                       (configuration defaults to wrapper.conf)
+  wrapper.exe                                 (equivalent to -c wrapper.conf)
+
+  A relative configuration path, and every relative path inside it, is resolved
+  from the directory containing wrapper.exe, not from the caller's directory.
+  Command-line name=value properties override wrapper.conf. Arguments following
+  -- are passed to the Java application without modification.
+
+COMMANDS
+  -c,  --console       Run the wrapper and Java application in this console.
+  -s,  --service       Internal SCM entry point stored in the service ImagePath.
+                       Do not normally invoke this command by hand.
+  -t,  --start         Start the installed Windows service and wait for Running.
+  -a,  --pause         Pause a service configured as pausable.
+  -e,  --resume        Resume a paused service.
+  -p,  --stop          Stop the service and wait for Stopped.
+  -i,  --install       Install the service described by wrapper.conf.
+  -it, --installstart  Install and then start the service.
+  -r,  --remove        Stop and remove the exact configured service.
+  -l=<code>, --controlcode=<code>
+                       Send a Windows user control code in the range 128..255.
+  -d,  --dump          Request a thread dump from a running service. The default
+                       service control code is 255.
+       --heapdump      Request an HPROF heap dump from a running service. This is
+                       a Java Service Steward extension; default control code 254.
+  -q,  --query         Print service state/start type and return a status mask.
+  -qs, --querysilent   Return the same mask without printing service status.
+  -v,  --version       Print the product version.
+  -?, -h, --help       Print this complete reference. No configuration is read.
+  -- <args>            End wrapper arguments; pass the remainder to Java.
+
+  Install, remove and some control commands require an elevated Windows shell.
+  Query mask bits: 1=installed, 2=running, 4=interactive, 8=automatic start,
+  16=manual start, 32=disabled, 64=paused. An absent service returns 0.
+
+QUICK EXAMPLES
+  wrapper.exe -c wrapper.conf
+  wrapper.exe wrapper.conf wrapper.debug=true
+  wrapper.exe -i wrapper.conf
+  wrapper.exe -t wrapper.conf
+  wrapper.exe -p wrapper.conf
+  wrapper.exe -d wrapper.conf
+  wrapper.exe --heapdump wrapper.conf
+  wrapper.exe -c wrapper.conf -- --server-config=standalone-full.xml
+  sc.exe control MyJavaService 255             (thread dump)
+  sc.exe control MyJavaService 254             (heap dump)
+
+CONFIGURATION SYNTAX
+  name=value                  Define a property.
+  set.NAME=value              Set/replace a child-process environment variable.
+  set.default.NAME=value      Set it only if it is not already defined.
+  %NAME%                      Expand an environment variable, including set.* values.
+  #encoding=UTF-8             Select file encoding on the first line.
+  #include path               Include a file if present.
+  #include.required path      Include a file and fail if it is absent.
+  #include.debug path         Include a file and retain include diagnostics.
+  A trailing backslash continues a logical line. A single # begins an inline
+  comment; write ## for a literal #. Include nesting is limited to 10 levels.
+  Boolean true values are true, yes, 1 and on (case-insensitive).
+
+  Numbered sequences normally start at 1 and stop at the first missing index.
+  An explicitly empty value preserves its index but emits no Java argument.
+  wrapper.ignore_sequence_gaps=true reads all positive numbered indexes.
+
+  Prefixes: wrapper.* properties belong to the shared configuration format;
+  jss.* properties are Java Service Steward extensions, always optional, with
+  defaults that reproduce the standard behavior. Unknown wrapper.* or jss.*
+  names are reported in the log and ignored; any other name is kept as an
+  application property readable through Steward.getProperties().
+
+JAVA LAUNCH PROPERTIES
+  wrapper.java.command=<path|java>              Required Java executable.
+  wrapper.java.mainclass=<class>                 Wrapper-side main class; default Main.
+  wrapper.java.classpath.<n>=<path>              Ordered classpath entries.
+  wrapper.java.library.path.<n>=<path>            Ordered java.library.path entries.
+  wrapper.java.additional.<n>=<argument(s)>       Ordered JVM arguments; Windows quoting applies.
+  wrapper.java.additional.auto_bits=<bool>        Accepted and ignored; no -d32/-d64 is injected.
+  wrapper.java.initmemory=<MiB>                   Adds -Xms when greater than zero.
+  wrapper.java.maxmemory=<MiB>                    Adds -Xmx when greater than zero.
+  wrapper.app.parameter.<n>=<argument(s)>         Main/application parameters.
+  wrapper.working.dir=<path>                      JVM working directory; default EXE directory.
+  wrapper.native_library=<name>                   Accepted and ignored; no native library is loaded.
+  wrapper.cpu.timeout=<seconds>                   Accepted and ignored.
+  wrapper.java.command.loglevel=<level>           Command diagnostic level; default DEBUG.
+  wrapper.debug=<bool>                            Enables DEBUG logging and bridge diagnostics.
+  wrapper.use_system_time=<bool>                  Forwarded to the Java bridge.
+  wrapper.disable_console_input=<bool>            Forwarded to the Java bridge.
+  wrapper.listener.force_stop=<bool>               Forwarded to the Java bridge.
+  wrapper.disable_shutdown_hook=<bool>             Forwarded to the Java bridge.
+  wrapper.license.<name>=<value>                   Accepted and ignored; no license key is needed.
+
+JAVA BRIDGE AND INTEGRATION METHODS
+  The Java side of the wrapper is the bundled wrapper.jar (package
+  io.github.jayyanez.jss.bridge, Java 8 bytecode, no native library). It must be
+  on wrapper.java.classpath whenever wrapper.java.mainclass names one of the
+  launchers below. The launcher and the JVM system properties it receives form
+  an internal contract: always deploy the wrapper.exe and wrapper.jar of the
+  same release together.
+
+  Launcher classes:
+    io.github.jayyanez.jss.bridge.SimpleApp
+      Parameters: <application main class> [application arguments...]
+      Runs main(String[]) on a non-daemon thread. When the application returns
+      and no non-daemon threads remain, the JVM exits and wrapper.on_exit.*
+      applies.
+    io.github.jayyanez.jss.bridge.StartStopApp
+      Parameters: <startClass> <startArgCount> <startArgs...>
+                  <stopClass> <waitForStopThreads:true|false> <stopArgCount> <stopArgs...>
+      A stop request runs stopClass.main(stopArgs) and, when requested, waits
+      for the remaining application threads before the JVM exits.
+    io.github.jayyanez.jss.bridge.JarApp
+      Parameters: <jar path> [application arguments...]
+      Runs the Main-Class declared by the JAR manifest.
+
+  A configured main class that is not on the classpath and whose name ends in
+  SimpleApp, StartStopApp or JarApp is launched through the matching bundled
+  launcher, and the substitution is recorded in the log. Configuration files
+  written for another product's launcher classes therefore keep working
+  without any edit. If the bridge is not on the classpath the wrapper refuses
+  to start Java and explains which JAR to deploy.
+
+  Any other main class is launched exactly as configured. Such a class may use
+  io.github.jayyanez.jss.bridge.Steward (stop, restart, log, properties, PIDs)
+  and Steward.start(ServiceListener, args) to receive start, stop and control
+  callbacks. Without the bridge the wrapper never receives a started signal and
+  wrapper.startup.timeout applies.
+
+LOCAL CONTROL PROTOCOL
+  wrapper.port=<port>                            Fixed wrapper listen port; 0/unset scans range.
+  wrapper.port.min=<port>                        Default 32000.
+  wrapper.port.max=<port>                        Default 32999.
+  wrapper.jvm.port=<port>                        Optional fixed JVM client port.
+  wrapper.jvm.port.min=<port>                    Default 31000.
+  wrapper.jvm.port.max=<port>                    Default 31999.
+
+  The authenticated channel binds only to IPv4 loopback. The generated key and
+  sensitive command properties are not written to logs, and properties whose
+  names look sensitive are not sent to the JVM.
+
+STARTUP, PING, SHUTDOWN AND RESTART
+  wrapper.startup.timeout=<seconds>               Default 30; 0 disables startup deadline.
+  wrapper.startup.delay=<seconds>                 Default 0 before the first JVM.
+  wrapper.startup.delay.console=<seconds>         Console-specific startup delay override.
+  wrapper.startup.delay.service=<seconds>         Service-specific startup delay override.
+  wrapper.shutdown.timeout=<seconds>              Graceful Java stop timeout; default 30.
+  wrapper.ping.interval=<seconds>                 Ping interval; default 5, minimum 1.
+  wrapper.ping.timeout=<seconds>                  Missing-ping timeout; default 30; 0 disables.
+  wrapper.restart.delay=<seconds>                 Delay between JVM invocations; default 5.
+  wrapper.max_failed_invocations=<count>          Consecutive short launches; default 5.
+  wrapper.successful_invocation_time=<seconds>    Successful-runtime threshold; default 300.
+  wrapper.disable_restarts=<bool>                 Disable every JVM restart.
+  wrapper.disable_restarts.automatic=<bool>       Disable only automatic restarts.
+  wrapper.on_exit.default=SHUTDOWN|RESTART|PAUSE  Default action: SHUTDOWN.
+  wrapper.on_exit.<code>=SHUTDOWN|RESTART|PAUSE   Per-exit-code override.
+  wrapper.pause_on_startup=<bool>                 Start the service in Paused when allowed.
+  jss.java.job_object=<bool>                      Place the JVM in a Windows Job Object that
+                                                 terminates it and its children if the
+                                                 wrapper process ends; default true.
+
+  When the control channel is lost the affected JVM exits and a new JVM is
+  launched subject to the configured restart policy.
+
+PID AND INVOCATION FILES
+  wrapper.pidfile=<path>                          Wrapper PID plus CRLF; removed when owned run ends.
+  wrapper.pidfile.strict=<bool>                   Fail if wrapper.pidfile already exists.
+  wrapper.java.pidfile=<path>                     Current JVM PID plus CRLF; lifetime-scoped.
+  wrapper.java.idfile=<path>                      JVM invocation number plus CRLF; updated on restart.
+
+LOG FILE AND CONSOLE
+  wrapper.logfile=<path>                          Default wrapper.log.
+  wrapper.logfile.format=<tokens>                 Default LPTM.
+  wrapper.logfile.loglevel=<level>                Default INFO.
+  wrapper.logfile.rollmode=<mode>                 Default SIZE.
+  wrapper.logfile.maxsize=<size>                  SIZE threshold; e.g. 50m, 20mb, 2g.
+  wrapper.logfile.maxfiles=<count>                Archive limit; 0 means unlimited history.
+  wrapper.console.format=<tokens>                 Default PM.
+  wrapper.console.loglevel=<level>                Default INFO.
+  wrapper.console.flush=<bool>                    Flush every console record; default false.
+  wrapper.console.title=<text>                    Optional console title.
+  wrapper.console.title.windows=<text>            Windows-specific title override.
+  wrapper.syslog.loglevel=<level>                 Used only for bridge log-level negotiation;
+                                                 no separate event-log sink is emitted.
+
+  Levels: DEBUG, INFO, STATUS, WARN, ERROR, FATAL, ADVICE, NOTICE, NONE.
+  Format tokens (joined with literal " | "):
+    L=level, P=source, D=thread/source type, Q=blank, T=local timestamp seconds,
+    Z=local timestamp milliseconds, U=wrapper uptime seconds, G=legacy zero
+    placeholder, M=message. Log records always end in Windows CRLF.
+
+  Roll modes:
+    NONE             Never rotate automatically.
+    SIZE             Rotate before a record when the active file reached maxsize.
+    WRAPPER          Rotate when the wrapper starts.
+    JVM              Rotate at wrapper start and before each later JVM invocation.
+    SIZE_OR_WRAPPER  Combine SIZE and WRAPPER.
+    SIZE_OR_JVM      Combine SIZE and JVM.
+  Archives are wrapper.log.1 (newest), wrapper.log.2, and so on.
+
+  The records "--> Wrapper Started as Service", "--> Wrapper Started as
+  Console" and "<-- Wrapper Stopped" are stable markers for log monitoring.
+  Every other message may be reworded between releases.
+
+OUTPUT FILTERS
+  wrapper.filter.trigger.<n>=<text>                Match JVM output; first matching filter wins.
+  wrapper.filter.allow_wildcards.<n>=<bool>            Enable * and ? in that trigger; default false.
+  wrapper.filter.action.<n>=<actions>             Default RESTART; chain with comma/space.
+  wrapper.filter.message.<n>=<text>                 Log message; default "Filter trigger matched."
+
+  Actions: NONE, DEBUG, DUMP, GC, RESTART, SHUTDOWN, PAUSE, RESUME.
+  DUMP requests a thread dump; GC requests a full JVM garbage collection.
+  Output lines longer than 64 KiB are split before matching and logging.
+
+WINDOWS SERVICE PROPERTIES
+  wrapper.ntservice.name=<name>                    Required for service commands.
+  wrapper.ntservice.displayname=<text>             Default: service name.
+  wrapper.ntservice.description=<text>             Optional SCM description.
+  wrapper.ntservice.starttype=<type>                AUTO_START (default), DEMAND_START or DISABLED;
+                                                 AUTO and MANUAL are accepted aliases.
+  wrapper.ntservice.dependency.<n>=<name>            Ordered service dependencies; +name denotes a group.
+  wrapper.ntservice.account=<account>               Optional service account; default LocalSystem.
+  wrapper.ntservice.password=<password>             Used only at install; never stored in ImagePath.
+  wrapper.ntservice.interactive=<bool>               Interactive LocalSystem service when allowed.
+  wrapper.ntservice.generate_console=<bool>          Hidden service console; default true.
+  wrapper.pausable=<bool>                            Enable Pause/Continue; default false.
+  wrapper.ntservice.pausable=<bool>                  Service-specific alias/fallback.
+  wrapper.pausable.stop_jvm=<bool>                   Pause stops JVM; default true.
+  wrapper.ntservice.pausable.stop_jvm=<bool>         Service-specific alias/fallback.
+  wrapper.thread_dump_control_code=<128..255>        Default 255; 0 disables inbound mapping.
+
+  wrapper.internal.namedpipe=<value> is accepted as a compatibility no-op.
+  When the service cannot start (for example because wrapper.conf is missing
+  or invalid), the reason is written to the Windows Application event log
+  under the service name.
+
+PRODUCTION JAVA RUNTIME
+  Core supervision requires the configured java/java.exe launcher. A deployed
+  JRE or custom runtime does not need javac, jar, jcmd, or other JDK build tools.
+  The bundled wrapper.jar uses Java 8 bytecode and only java.base directly. A
+  JDK is required to build that JAR, not to run the service.
+
+  Capabilities are checked individually instead of guessing from directory
+  names. Start, stop, restart, pings, wrapper.log, rotation, filters, SCM, and
+  the control protocol do not depend on jcmd. A missing optional diagnostic
+  tool rejects only that request and never intentionally stops or restarts Java.
+
+THREAD DUMPS
+  wrapper.exe -d wrapper.conf
+  wrapper.thread_dump_control_code=255              Default.
+  wrapper.request_thread_dump_on_failed_jvm_exit=<bool>
+  wrapper.request_thread_dump_on_failed_jvm_exit.delay=<seconds>  Default 5.
+  jss.threaddump.method=AUTO|BREAK|JCMD              Default AUTO.
+  jss.threaddump.timeout=<seconds>                   jcmd timeout; default 30.
+
+  BREAK delivers a Windows CTRL_BREAK event to the JVM and works with a JRE,
+  but -Xrs disables it. AUTO uses BREAK unless Java was started with -Xrs, in
+  which case it runs jcmd Thread.print -l. JCMD forces that path. Output is
+  captured as ordinary jvm <n> records in the configured wrapper.log, with its
+  normal format and rotation.
+
+HEAP DUMPS (JAVA SERVICE STEWARD EXTENSION)
+  wrapper.exe --heapdump wrapper.conf
+  jss.heapdump.control_code=<128..255>               Default 254; must differ from thread code.
+  jss.heapdump.directory=<path>                      Default: active wrapper.log directory.
+  jss.heapdump.timeout=<seconds>                     jcmd GC.heap_dump limit; default 600.
+
+  The wrapper runs jcmd <pid> GC.heap_dump asynchronously and creates a unique
+  heap-YYYYMMDD-HHMMSS-jvmN-pidN.hprof without overwriting existing files.
+  One heap dump may run at a time. The JVM must have reported started. The
+  ping watchdog is extended by the heap-dump timeout while a dump is running.
+
+  Both on-demand HPROF and JCMD thread dumps require jcmd matching the
+  configured Java runtime (beside an explicit java.exe, or on PATH for a bare
+  java command). A JRE/custom runtime may omit it. -XX:+DisableAttachMechanism
+  also disables both operations. The service account must be able to attach to
+  its JVM. Failure is logged and does not intentionally stop or restart Java.
+
+  -XX:+HeapDumpOnOutOfMemoryError is a separate HotSpot option passed through
+  wrapper.java.additional.<n>; it is not a wrapper command. Without
+  -XX:HeapDumpPath, HotSpot normally writes java_pid<pid>.hprof in the JVM
+  working directory, which may differ from the wrapper.log directory.
+
+  HPROF files can be as large as the live heap, can pause the application, and
+  can contain passwords, tokens and user data. Check free disk space, wait for
+  "Heap dump completed" in wrapper.log, protect the file as a production secret,
+  and remove it after analysis. Completed HPROF files are not auto-rotated.
+
+COMPATIBILITY LIMITS
+  Target platform is Windows x64. Java 21 and 25 are release requirements;
+  Java 8 is maintained as a secondary compatibility target. Application servers
+  receive no special handling: all behavior comes from wrapper.conf.
+
+  Unknown wrapper.* properties produce a warning and are ignored only when safe.
+  Unix daemon mode, a named-pipe control channel, native process and service
+  enumeration APIs, JMX events and license keys are not implemented. The
+  original wrapper JAR and native library of other products are not supported
+  by this executable; deploy the bundled wrapper.jar instead. Remote
+  telemetry/control transport is currently disabled.

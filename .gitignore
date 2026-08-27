@@ -1,0 +1,25 @@
+/target/
+/.idea/
+/.vscode/
+*.pdb
+*.ilk
+*.log
+*.log.*
+*.dmp
+*.hprof
+heapdumps/
+.env
+
+# Never commit real deployment configuration or key material. Example files
+# use the .example suffix.
+*.conf
+*.keystore
+*.truststore
+*.p12
+*.pfx
+*.key
+secrets/
+
+# Internal working documents and local tool configuration; not part of the public repository.
+/docs/plans/
+/.claude/

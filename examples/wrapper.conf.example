@@ -1,0 +1,254 @@
+#encoding=UTF-8
+# ---------------------------------------------------------------------------
+# Java Service Steward - example configuration
+#
+# Copy this file next to wrapper.exe as wrapper.conf and adjust the lines
+# marked CHANGE. Every relative path in this file is resolved from the
+# directory that contains wrapper.exe, never from the caller's current
+# directory, so the same file works from a console and from the Service
+# Control Manager.
+#
+# Syntax reminders:
+#   name=value             define a property
+#   set.NAME=value         environment variable for this file and for the JVM
+#   set.default.NAME=value same, but only when NAME is not already defined
+#   %NAME%                 expands an environment variable (set.* included)
+#   #include path          optional include; #include.required fails if absent
+#   trailing \             continues the logical line
+#   # comment              a single # starts a comment; write ## for a literal #
+#
+# Numbered properties (.1, .2, ...) are read in order and stop at the first
+# missing index. An explicitly empty value keeps its index and produces no
+# argument.
+# ---------------------------------------------------------------------------
+
+# Where the application lives. CHANGE. Forward slashes are fine on Windows.
+set.APP_HOME=C:/example/app
+
+# ---------------------------------------------------------------------------
+# Java runtime and launch
+# ---------------------------------------------------------------------------
+
+# Java launcher. A runtime is enough; a JDK is not required. jcmd is optional
+# and only used for diagnostics. CHANGE if JAVA_HOME is not defined for the
+# service account (services do not see per-user environment variables).
+wrapper.java.command=%JAVA_HOME%/bin/java.exe
+
+# Launcher class. SimpleApp runs the main class named by the first application
+# parameter. Other launchers: io.github.jayyanez.jss.bridge.StartStopApp
+# (separate start and stop classes) and io.github.jayyanez.jss.bridge.JarApp
+# (Main-Class of an executable JAR). A file written for another product can
+# keep its original launcher value: a class that is not on the classpath and
+# whose name ends in SimpleApp, StartStopApp or JarApp is launched through the
+# bundled launcher of that name (see docs/migration.md).
+wrapper.java.mainclass=io.github.jayyanez.jss.bridge.SimpleApp
+
+# Classpath. The bundled wrapper.jar (the Java bridge) must be on it; without
+# it the wrapper refuses to launch Java. A trailing /* adds every JAR in that
+# directory. CHANGE the application entries.
+wrapper.java.classpath.1=wrapper.jar
+wrapper.java.classpath.2=%APP_HOME%/lib/*
+wrapper.java.classpath.3=%APP_HOME%/config
+
+# Directories added to java.library.path for native libraries.
+wrapper.java.library.path.1=%APP_HOME%/lib/native
+
+# JVM options, one per index. Windows command-line quoting applies when a
+# value contains spaces. Index 3 is intentionally empty: the gap keeps its
+# index and emits nothing, which is handy for disabling an option temporarily.
+wrapper.java.additional.1=-Dfile.encoding=UTF-8
+wrapper.java.additional.2=-Djava.io.tmpdir=%APP_HOME%/tmp
+wrapper.java.additional.3=
+wrapper.java.additional.4=-XX:+HeapDumpOnOutOfMemoryError
+wrapper.java.additional.5=-XX:HeapDumpPath=%APP_HOME%/logs
+
+# Heap limits in MiB (-Xms / -Xmx). 0 means "do not add the flag".
+wrapper.java.initmemory=256
+wrapper.java.maxmemory=1024
+
+# Application main class and its arguments. With SimpleApp, parameter 1 is the
+# class whose main(String[]) is invoked; the remaining parameters are passed
+# to it in order. CHANGE.
+wrapper.app.parameter.1=com.example.Main
+wrapper.app.parameter.2=--config
+wrapper.app.parameter.3=%APP_HOME%/config/app.properties
+
+# Working directory of the JVM. Default: the directory containing wrapper.exe.
+#wrapper.working.dir=%APP_HOME%
+
+# ---------------------------------------------------------------------------
+# Start-up, health checks, shutdown, and restarts (all values in seconds)
+# ---------------------------------------------------------------------------
+
+# Time the JVM has to connect and report that the application started.
+# 0 disables the deadline. Default 30.
+wrapper.startup.timeout=60
+
+# Time allowed for a clean stop before the JVM is terminated forcibly.
+# Default 30.
+wrapper.shutdown.timeout=60
+
+# Liveness pings between the wrapper and the JVM. A JVM that does not answer
+# within ping.timeout is considered hung and restarted. 0 disables the check.
+wrapper.ping.interval=5
+wrapper.ping.timeout=30
+
+# Pause between a JVM exiting and the next one being launched. Default 5.
+wrapper.restart.delay=5
+
+# Restart throttling: give up after this many consecutive launches that ended
+# in less than successful_invocation_time seconds. Defaults 5 and 300.
+wrapper.max_failed_invocations=5
+wrapper.successful_invocation_time=300
+
+# Action when the JVM exits: SHUTDOWN (default), RESTART, or PAUSE.
+# wrapper.on_exit.<code> overrides it for one exit code.
+wrapper.on_exit.default=SHUTDOWN
+#wrapper.on_exit.42=RESTART
+
+# Disable every restart, or only the automatic ones, while investigating.
+#wrapper.disable_restarts=false
+#wrapper.disable_restarts.automatic=false
+
+# ---------------------------------------------------------------------------
+# Output filters
+# ---------------------------------------------------------------------------
+# Every line the JVM prints is compared with the triggers in order; the first
+# match wins. Actions: NONE, DEBUG, DUMP (thread dump), GC, RESTART, SHUTDOWN,
+# PAUSE, RESUME; several actions can be chained with commas. The * and ?
+# wildcards need allow_wildcards=true.
+wrapper.filter.trigger.1=java.lang.OutOfMemoryError
+wrapper.filter.allow_wildcards.1=false
+wrapper.filter.action.1=RESTART
+wrapper.filter.message.1=Out of memory reported by the JVM.
+
+#wrapper.filter.trigger.2=*FATAL*connection pool exhausted*
+#wrapper.filter.allow_wildcards.2=true
+#wrapper.filter.action.2=DUMP,RESTART
+#wrapper.filter.message.2=Connection pool exhausted.
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+
+# Log file, relative to the wrapper.exe directory. The directory is created
+# if needed.
+wrapper.logfile=../logs/wrapper.log
+
+# Record format tokens: L=level, P=source, T=time, M=message (also D, Q, Z,
+# U, G; see wrapper.exe --help). Default LPTM.
+wrapper.logfile.format=LPTM
+
+# Levels: DEBUG, INFO, STATUS, WARN, ERROR, FATAL, ADVICE, NOTICE, NONE.
+wrapper.logfile.loglevel=INFO
+
+# Rotation: NONE, SIZE, WRAPPER (at wrapper start), JVM (at every JVM
+# launch), SIZE_OR_WRAPPER, SIZE_OR_JVM.
+wrapper.logfile.rollmode=SIZE
+wrapper.logfile.maxsize=10m
+# Archives are kept as wrapper.log.1 (newest) up to wrapper.log.10;
+# 0 keeps an unlimited history.
+wrapper.logfile.maxfiles=10
+
+# Console output (console mode only).
+wrapper.console.format=PM
+wrapper.console.loglevel=INFO
+#wrapper.console.title=Example Service
+
+# DEBUG output from the wrapper and the bridge, for troubleshooting.
+#wrapper.debug=false
+
+# ---------------------------------------------------------------------------
+# PID and invocation files (optional)
+# ---------------------------------------------------------------------------
+#wrapper.pidfile=../logs/wrapper.pid
+#wrapper.pidfile.strict=false
+#wrapper.java.pidfile=../logs/java.pid
+#wrapper.java.idfile=../logs/java.id
+
+# ---------------------------------------------------------------------------
+# Windows service
+# ---------------------------------------------------------------------------
+
+# Internal service name, used by sc.exe and by wrapper.exe -i/-t/-p/-r.
+# CHANGE.
+wrapper.ntservice.name=example-service
+wrapper.ntservice.displayname=Example Service
+wrapper.ntservice.description=Example Java application hosted by Java Service Steward.
+
+# AUTO_START (default), DEMAND_START, or DISABLED.
+wrapper.ntservice.starttype=AUTO_START
+
+# Services that must be running first; +name denotes a service group.
+#wrapper.ntservice.dependency.1=Tcpip
+#wrapper.ntservice.dependency.2=MSSQLSERVER
+
+# Service account. The default is LocalSystem; a dedicated account is strongly
+# recommended (see SECURITY.md). The password is used only at install time
+# and is never stored in the service registration. Prefer passing it on the
+# install command line (wrapper.exe -i wrapper.conf wrapper.ntservice.password=...)
+# over keeping it in this file.
+#wrapper.ntservice.account=.\jss-service
+#wrapper.ntservice.password=
+
+# Allow Pause and Continue from the Service Control Manager. When enabled,
+# pausable.stop_jvm decides whether pausing stops the JVM (default true).
+wrapper.pausable=false
+#wrapper.pausable.stop_jvm=true
+
+# Start in the paused state (only meaningful when pausable).
+#wrapper.pause_on_startup=false
+
+# Windows user control code (128-255) that requests a thread dump; 0 disables
+# it. wrapper.exe -d and "sc.exe control example-service 255" both use it.
+wrapper.thread_dump_control_code=255
+
+# Request a thread dump before terminating a JVM that ignored the stop request.
+#wrapper.request_thread_dump_on_failed_jvm_exit=false
+#wrapper.request_thread_dump_on_failed_jvm_exit.delay=5
+
+# ---------------------------------------------------------------------------
+# Java Service Steward extensions (jss.*), shown with their default values
+# ---------------------------------------------------------------------------
+
+# How a thread dump is requested: AUTO (CTRL_BREAK, or jcmd Thread.print when
+# the JVM runs with -Xrs), BREAK, or JCMD.
+#jss.threaddump.method=AUTO
+
+# Seconds to wait for jcmd Thread.print before giving up.
+#jss.threaddump.timeout=30
+
+# Control code for an on-demand HPROF heap dump (wrapper.exe --heapdump).
+# Must differ from wrapper.thread_dump_control_code.
+#jss.heapdump.control_code=254
+
+# Directory for heap dump files. Default: the directory of wrapper.log.
+# HPROF files contain the whole heap, secrets included; protect the directory.
+#jss.heapdump.directory=../logs
+
+# Seconds before a running jcmd GC.heap_dump is killed.
+#jss.heapdump.timeout=600
+
+# Place the JVM in a Windows Job Object so that it and every process it
+# spawns are terminated together with the wrapper, even if the wrapper is
+# killed.
+#jss.java.job_object=true
+
+# ---------------------------------------------------------------------------
+# Variant: an application server launched from its boot JAR
+# ---------------------------------------------------------------------------
+# Many application servers ship an executable boot JAR instead of documenting
+# a main class. The JarApp launcher reads Main-Class from the JAR manifest:
+# parameter 1 is the JAR and the remaining parameters go to the server.
+# Replace the SimpleApp block above with something like this:
+#
+#wrapper.java.mainclass=io.github.jayyanez.jss.bridge.JarApp
+#wrapper.java.classpath.1=wrapper.jar
+#wrapper.java.additional.1=-Xrs
+#wrapper.java.additional.2=-Dserver.home=%APP_HOME%
+#wrapper.app.parameter.1=%APP_HOME%/bin/server-boot.jar
+#wrapper.app.parameter.2=--server-config=production.xml
+#
+# -Xrs keeps the JVM from reacting to console signals, which is common for
+# services. With it, CTRL_BREAK thread dumps are unavailable and the default
+# jss.threaddump.method=AUTO falls back to jcmd automatically.

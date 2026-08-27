@@ -1,0 +1,52 @@
+# cargo-deny configuration (https://embarkstudios.github.io/cargo-deny/).
+# Run `cargo deny check` locally; CI runs `check licenses advisories bans sources`.
+
+[graph]
+# The only shipped target. Dependencies that are never built for it are ignored.
+targets = ["x86_64-pc-windows-msvc"]
+all-features = true
+
+[output]
+feature-depth = 1
+
+[advisories]
+# Defaults: known vulnerabilities, unmaintained crates, unsound crates, and
+# yanked versions are all reported as errors. Add an advisory ID to `ignore`
+# only with a comment explaining why it does not apply.
+db-path = "$CARGO_HOME/advisory-dbs"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "deny"
+ignore = []
+
+[licenses]
+# Every license that is not in this list is rejected. In particular, no
+# copyleft or source-available license can enter the dependency graph:
+# GPL-2.0, GPL-3.0, LGPL-2.1, LGPL-3.0, AGPL-3.0, SSPL-1.0, and their variants
+# all fail this check.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "Unicode-3.0",
+    "Zlib",
+    "Apache-2.0 WITH LLVM-exception",
+]
+confidence-threshold = 0.8
+exceptions = []
+
+[licenses.private]
+# The workspace crate itself is not published; its license is set in Cargo.toml.
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

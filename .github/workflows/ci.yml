@@ -1,0 +1,149 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  rust:
+    name: Rust stable / Temurin ${{ matrix.java }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [8, 21, 25]
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Test
+        run: cargo test --all-targets --all-features --locked
+        env:
+          JSS_REQUIRE_JAVA_TESTS: "1"
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Build Java bridge
+        run: pwsh ./scripts/build-java-bridge.ps1
+
+      - name: Verify version consistency and artifacts
+        run: pwsh ./scripts/verify-version.ps1 -RequireArtifacts
+
+  msrv:
+    name: MSRV (Rust 1.88)
+    runs-on: windows-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install Rust 1.88
+        id: toolchain
+        uses: dtolnay/rust-toolchain@1.88
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check
+        run: cargo check --all-targets --locked
+        env:
+          # Overrides rust-toolchain.toml (stable) for this job only.
+          RUSTUP_TOOLCHAIN: ${{ steps.toolchain.outputs.name }}
+
+  licenses:
+    name: Licenses, advisories, bans, sources
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: cargo deny
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check licenses advisories bans sources
+
+  dco:
+    name: Developer Certificate of Origin
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Every commit carries a Signed-off-by line
+        shell: bash
+        run: |
+          missing=0
+          for sha in $(git rev-list "origin/${{ github.event.pull_request.base.ref }}..${{ github.event.pull_request.head.sha }}"); do
+            if ! git log -1 --format=%B "$sha" | grep -q -E '^Signed-off-by: .+ <.+@.+>$'; then
+              echo "::error::commit $sha has no Signed-off-by line (use git commit -s)"
+              missing=1
+            fi
+          done
+          exit $missing
+
+  hygiene:
+    name: Source hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+      - name: License headers, forbidden files and third-party material
+        shell: bash
+        run: |
+          status=0
+          while IFS= read -r file; do
+            if ! head -n 3 "$file" | grep -q 'SPDX-License-Identifier: Apache-2.0 OR MIT'; then
+              echo "::error file=$file::missing SPDX-License-Identifier header"
+              status=1
+            fi
+          done < <(git ls-files 'src/*.rs' 'tests/*.rs' 'java/*.java' 'tests/*.java' 'scripts/*.ps1')
+          if git ls-files | grep -E -i '\.(log|conf|jar|exe|dll|hprof|pid|zip|pdb|p12|pfx|key|keystore|truststore)$'; then
+            echo "::error::binary, log, configuration or key material files must not be committed"
+            status=1
+          fi
+          if git grep -n -i -E 'GNU (General|Lesser|Affero) (General )?Public License|\bL?GPL-?[23]' -- src java tests scripts examples; then
+            echo "::error::copyleft license text found in source files"
+            status=1
+          fi
+          if git grep -n -i 'tanuki' -- src java tests scripts examples | grep -v -E 'FOREIGN_NAME_MARKERS|verify-version\.ps1'; then
+            echo "::error::third-party product names are not allowed in source files (see docs/provenance.md)"
+            status=1
+          fi
+          if git grep -n -P '[^\x00-\x7F]' -- src java tests scripts examples | grep -v 'JSS_SYNTHETIC_ENCODING'; then
+            echo "::error::non-ASCII text in source files; everything must be written in English"
+            status=1
+          fi
+          exit $status

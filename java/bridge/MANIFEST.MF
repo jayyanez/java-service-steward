@@ -1,0 +1,4 @@
+Manifest-Version: 1.0
+Implementation-Title: Java Service Steward Java Bridge
+Implementation-Version: @PROJECT_VERSION@
+Java-Service-Steward-Bridge: true
