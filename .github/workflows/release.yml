@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      sign:
+        description: "Request one Azure signature for a validation build (never publishes a release)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -15,8 +21,12 @@ env:
 
 jobs:
   release:
+    if: github.event_name == 'push'
     name: Build and publish
     runs-on: windows-latest
+    environment: release-signing
+    env:
+      WINDOWS_RELEASE_SIGNING: ${{ github.repository == 'jayyanez/java-service-steward' && vars.WINDOWS_CODE_SIGNING_ENABLED != '0' }}
     steps:
       - name: Check out
         uses: actions/checkout@v5
@@ -55,6 +65,31 @@ jobs:
 
       - name: Verify version consistency and artifacts
         run: pwsh ./scripts/verify-version.ps1 -RequireArtifacts
+
+      - name: Authenticate the release signer with Azure OIDC
+        if: env.WINDOWS_RELEASE_SIGNING == 'true'
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign the Windows executable
+        if: env.WINDOWS_RELEASE_SIGNING == 'true'
+        uses: azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2
+        with:
+          endpoint: https://wus2.codesigning.azure.net/
+          signing-account-name: jayyanez-signing
+          certificate-profile-name: windows-apps
+          files: ${{ github.workspace }}\target\release\wrapper.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify Windows signing before packaging
+        shell: pwsh
+        run: |
+          ./scripts/verify-windows-signature.ps1 -FilePath 'target/release/wrapper.exe' -AllowUnsigned:($env:WINDOWS_RELEASE_SIGNING -ne 'true')
 
       - name: Generate the CycloneDX SBOM
         shell: pwsh
@@ -96,6 +131,15 @@ jobs:
           $zip = Join-Path $dist "$name.zip"
           Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal
 
+          # Validate the file users will receive, not only the pre-ZIP input.
+          $extracted = Join-Path $env:RUNNER_TEMP 'jss-release-verification'
+          Expand-Archive -LiteralPath $zip -DestinationPath $extracted
+          $extractedExe = Join-Path $extracted "$name/wrapper.exe"
+          ./scripts/verify-windows-signature.ps1 -FilePath $extractedExe -AllowUnsigned:($env:WINDOWS_RELEASE_SIGNING -ne 'true')
+          if ((Get-FileHash -LiteralPath $extractedExe).Hash -cne (Get-FileHash -LiteralPath 'target/release/wrapper.exe').Hash) {
+            throw 'The packaged executable differs from the verified build'
+          }
+
           $sums = Join-Path $dist 'SHA256SUMS'
           $lines = foreach ($artifact in @("$name.zip", "$name.cdx.json")) {
             $hash = (Get-FileHash -LiteralPath (Join-Path $dist $artifact) -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -132,6 +176,10 @@ jobs:
             dist/SHA256SUMS
           fail_on_unmatched_files: true
           generate_release_notes: true
+          body: |
+            Windows Authenticode signing enabled: ${{ env.WINDOWS_RELEASE_SIGNING }}.
+            When enabled, wrapper.exe is signed by Jay Yanez using Microsoft Azure Artifact Signing.
+            wrapper.jar is not JAR-signed. See docs/release.md for verification instructions.
 
       # crates.io publication runs only when the repository defines the
       # CARGO_REGISTRY_TOKEN secret, so forks can cut releases without it.
@@ -149,3 +197,78 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish --locked
+
+  validate-signing:
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'jayyanez/java-service-steward'
+    name: Validate Windows signing without publishing
+    runs-on: windows-latest
+    environment: release-signing
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VALIDATION_SIGNING: ${{ inputs.sign && vars.WINDOWS_CODE_SIGNING_ENABLED != '0' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build the real application and Java bridge
+        shell: pwsh
+        run: |
+          # A previous cache must not turn an OFF validation into a signed build.
+          if (Test-Path -LiteralPath 'target/release/wrapper.exe') {
+            Remove-Item -LiteralPath 'target/release/wrapper.exe' -Force
+          }
+          cargo build --release --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
+          ./scripts/build-java-bridge.ps1
+          ./scripts/verify-version.ps1 -RequireArtifacts
+
+      - name: Authenticate the validation signer
+        if: env.VALIDATION_SIGNING == 'true'
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign one validation executable
+        if: env.VALIDATION_SIGNING == 'true'
+        uses: azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2
+        with:
+          endpoint: https://wus2.codesigning.azure.net/
+          signing-account-name: jayyanez-signing
+          certificate-profile-name: windows-apps
+          files: ${{ github.workspace }}\target\release\wrapper.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify, package, and reverify the validation build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Path 'dist/validation' -Force | Out-Null
+          ./scripts/verify-windows-signature.ps1 -FilePath 'target/release/wrapper.exe' -AllowUnsigned:($env:VALIDATION_SIGNING -ne 'true') -OutputPath 'dist/signing-receipt.json'
+          Copy-Item -LiteralPath 'target/release/wrapper.exe','target/release/wrapper.jar' -Destination 'dist/validation'
+          'Internal signing validation build; not a public application release.' | Set-Content -LiteralPath 'dist/validation/VALIDATION.txt'
+          Compress-Archive -LiteralPath 'dist/validation' -DestinationPath 'dist/signing-validation.zip'
+          $extracted = Join-Path $env:RUNNER_TEMP 'jss-validation-extracted'
+          Expand-Archive -LiteralPath 'dist/signing-validation.zip' -DestinationPath $extracted
+          ./scripts/verify-windows-signature.ps1 -FilePath (Join-Path $extracted 'validation/wrapper.exe') -AllowUnsigned:($env:VALIDATION_SIGNING -ne 'true')
+          (Get-FileHash -LiteralPath 'dist/signing-validation.zip' -Algorithm SHA256).Hash | Set-Content -LiteralPath 'dist/SHA256.txt'
+
+      - name: Upload the validation build and signature receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: signing-validation-${{ github.run_id }}
+          path: |
+            dist/signing-validation.zip
+            dist/signing-receipt.json
+            dist/SHA256.txt
+          retention-days: 3

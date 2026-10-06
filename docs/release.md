@@ -163,13 +163,65 @@ gh attestation verify java-service-steward-<version>-windows-x64.zip --owner jay
 description, file and product version) so that Explorer, SmartScreen and
 code-signing services can identify it.
 
-## Code signing (pending)
+## Windows code signing
 
-`wrapper.exe` is not yet Authenticode-signed, so Windows SmartScreen may warn
-on first launch and application-control policies may block it. The plan is
-free signing through [SignPath Foundation](https://signpath.org/) for
-open-source projects: the release workflow uploads the built executable to
-SignPath, receives the signed file and stages that instead of the unsigned
-one; every signing request is approved manually by the maintainer. Signing
-`wrapper.jar` with `jarsigner` can be added at the same time. Until then, the
-provenance attestation above is the way to confirm that a download is genuine.
+Tagged releases from `jayyanez/java-service-steward` sign `wrapper.exe` with
+Microsoft Azure Artifact Signing under the verified publisher **Jay Yanez**.
+Existing 0.3.2 and older release assets remain unsigned and unchanged. The
+first newly published signed package must use a new version, at least 0.3.3.
+This changes release packaging/signatures, not the application's runtime API.
+
+The release workflow uses a dedicated Entra service principal and GitHub OIDC,
+with no client secret or downloaded PFX. Its only Azure role is `Artifact
+Signing Certificate Profile Signer` on the `windows-apps` profile. The
+`release-signing` GitHub environment accepts `v*` tags and `main` (for manual
+validation). Its environment secrets contain the client/tenant/subscription
+identifiers. The maintainer's private
+[windows-code-signing toolkit](https://github.com/jayyanez/windows-code-signing)
+documents installation on another PC, existing cloud resources, and local
+signing; public CI calls official Microsoft actions directly.
+
+Signing is ON for tagged releases unless the repository Actions variable
+`WINDOWS_CODE_SIGNING_ENABLED` is `0`:
+
+```powershell
+gh variable set WINDOWS_CODE_SIGNING_ENABLED --repo jayyanez/java-service-steward --body 0 # OFF
+gh variable set WINDOWS_CODE_SIGNING_ENABLED --repo jayyanez/java-service-steward --body 1 # ON
+```
+
+When ON, authentication/signing/verification failure aborts before publication.
+The workflow verifies the signature, timestamp, publisher and profile EKU
+before packaging and after ZIP extraction. Hashes/attestations cover the final
+package. When deliberately OFF, release notes identify that the build was
+unsigned. Ordinary push/PR CI does not sign. Fork release workflows skip this
+maintainer's signing setup rather than accessing its identity.
+
+To validate the hosted signing integration without publishing a release:
+
+```powershell
+# Default validation is unsigned: zero new signing requests.
+gh workflow run release.yml --repo jayyanez/java-service-steward --ref main -f sign=false
+# Intentional end-to-end test: one EXE signing request, unless repository signing is OFF.
+gh workflow run release.yml --repo jayyanez/java-service-steward --ref main -f sign=true
+```
+
+The manual job uploads a short-lived `signing-validation-<run-id>` artifact,
+including the EXE/JAR test ZIP and signature receipt. It never creates a GitHub
+Release or publishes to crates.io. An experimental 0.3.2 validation package is
+not a replacement for the public 0.3.2 release.
+
+To verify a downloaded release after extracting it:
+
+```powershell
+Get-AuthenticodeSignature -LiteralPath .\wrapper.exe |
+    Format-List Status,SignerCertificate,TimeStamperCertificate
+# From a source checkout, also verify publisher and durable profile identity:
+.\scripts\verify-windows-signature.ps1 -FilePath 'C:\downloads\wrapper.exe'
+```
+
+Expected: `Valid`, publisher `Jay Yanez`, timestamp present. The short-lived
+certificate rotates; do not pin a leaf thumbprint or re-sign releases every
+72 hours. The timestamp preserves ordinary verification after leaf expiry,
+subject to revocation/trust. Authenticode does not guarantee that every
+SmartScreen reputation prompt disappears. `wrapper.jar` is not JAR-signed;
+ZIP hashes and Sigstore provenance remain separate verification mechanisms.
