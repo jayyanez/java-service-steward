@@ -5,6 +5,16 @@ All notable changes to this project are recorded here. The format is based on
 [Semantic Versioning 2.0.0](https://semver.org/). See
 [docs/versioning.md](docs/versioning.md) for the project's version policy.
 
+## [Unreleased]
+
+### Added
+
+- Tagged Windows releases can use Microsoft Azure Artifact Signing under the
+  verified publisher Jay Yanez, with a repository on/off switch, OIDC
+  authentication, and signature verification before and after ZIP packaging.
+- Manual signing validation builds exercise the real executable without
+  publishing a GitHub Release or crate; signing is off by default for validation.
+
 ## [0.3.2] - 2026-08-27
 
 ### Added

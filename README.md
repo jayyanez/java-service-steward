@@ -81,8 +81,9 @@ configuration file is read for that command.
 Every release also ships a CycloneDX SBOM and a Sigstore build-provenance
 attestation; `gh attestation verify <zip> --owner jayyanez` proves that a
 download was built by this repository's release workflow. See
-[docs/release.md](docs/release.md#supply-chain-artifacts). `wrapper.exe` is not
-yet Authenticode-signed, so SmartScreen may warn on first launch.
+[docs/release.md](docs/release.md#supply-chain-artifacts). New tagged Windows
+releases use optional Authenticode signing; existing 0.3.2 and older downloads
+remain unsigned. See [code signing](#code-signing).
 
 ## Configuration
 
@@ -246,13 +247,15 @@ conditions.
 
 ## Code signing
 
-`wrapper.exe` is not yet Authenticode-signed; Windows SmartScreen may warn on
-first launch of a downloaded copy. The project has applied for free code
-signing for open-source projects through [SignPath Foundation](https://signpath.org/);
-once approved, release executables will be signed with a certificate issued in
-SignPath Foundation's name, and this section will name the team roles and the
-signing policy. Until then, every release carries a Sigstore build-provenance
-attestation (see [docs/release.md](docs/release.md#supply-chain-artifacts)).
+The release workflow signs `wrapper.exe` through Microsoft Azure Artifact
+Signing under the verified publisher **Jay Yanez**, unless the maintainer
+deliberately disables release signing. Ordinary CI/local builds remain
+unsigned, and manual validation does not publish a release. Existing 0.3.2
+and older release assets are unchanged; the first signed public package needs
+a new version. `wrapper.jar` is not JAR-signed. Authenticode, ZIP checksums,
+and Sigstore provenance are separate verification mechanisms, and signing
+does not guarantee that every SmartScreen reputation prompt disappears.
+See [the signing and validation procedure](docs/release.md#windows-code-signing).
 
 Privacy: this program will not transfer any information to other networked
 systems unless specifically requested by the user or the person installing or
